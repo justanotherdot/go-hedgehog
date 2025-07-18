@@ -48,33 +48,33 @@ func (p *Property[T]) Run(config *Config) *TestReport[T] {
 // RunWithReport executes the property test and returns a detailed report.
 func (p *Property[T]) RunWithReport(config *Config) *TestReport[T] {
 	random := NewRandom(config.Seed)
-	
+
 	report := &TestReport[T]{
 		PropertyName: p.name,
 		Config:       config,
 		StartTime:    time.Now(),
 	}
-	
+
 	for i := 0; i < config.TestCount; i++ {
 		tree := p.generator.Generate(random)
-		
+
 		if p.predicate(tree.Value()) {
 			report.PassedTests++
 			continue
 		}
-		
+
 		// Property failed, try to find minimal counterexample
-		counterexample, shrinkSteps := p.findMinimalCounterexample(tree)
-		
+		counterexample, shrinkSteps := p.findMinimalCounterexample(tree, config)
+
 		report.Result = TestFail
 		report.Counterexample = counterexample
 		report.ShrinkSteps = shrinkSteps
 		report.FailedAfter = i + 1
 		report.EndTime = time.Now()
-		
+
 		return report
 	}
-	
+
 	// All tests passed
 	report.Result = TestPass
 	report.EndTime = time.Now()
@@ -82,15 +82,15 @@ func (p *Property[T]) RunWithReport(config *Config) *TestReport[T] {
 }
 
 // findMinimalCounterexample finds the smallest counterexample through shrinking.
-func (p *Property[T]) findMinimalCounterexample(tree *Tree[T]) (T, []T) {
+func (p *Property[T]) findMinimalCounterexample(tree *Tree[T], config *Config) (T, []T) {
 	var shrinkSteps []T
 	current := tree
-	
+
 	// Keep shrinking until we can't shrink any further
 	for {
 		shrinks := current.Shrinks()
 		foundSmaller := false
-		
+
 		for _, shrink := range shrinks {
 			if !p.predicate(shrink.Value()) {
 				shrinkSteps = append(shrinkSteps, shrink.Value())
@@ -99,17 +99,17 @@ func (p *Property[T]) findMinimalCounterexample(tree *Tree[T]) (T, []T) {
 				break
 			}
 		}
-		
+
 		if !foundSmaller {
 			break
 		}
-		
+
 		// Prevent infinite shrinking
-		if len(shrinkSteps) > 1000 {
+		if len(shrinkSteps) >= config.ShrinkLimit {
 			break
 		}
 	}
-	
+
 	return current.Value(), shrinkSteps
 }
 
@@ -139,7 +139,7 @@ func (r *TestReport[T]) Success() bool {
 // String returns a string representation of the test report.
 func (r *TestReport[T]) String() string {
 	var sb strings.Builder
-	
+
 	switch r.Result {
 	case TestPass:
 		sb.WriteString(fmt.Sprintf("✓ Property passed %d tests", r.PassedTests))
@@ -147,27 +147,27 @@ func (r *TestReport[T]) String() string {
 			sb.WriteString(fmt.Sprintf(" (%s)", r.PropertyName))
 		}
 		sb.WriteString(fmt.Sprintf(" in %v\n", r.Duration()))
-		
+
 	case TestFail:
 		sb.WriteString(fmt.Sprintf("✗ Property failed after %d tests", r.FailedAfter))
 		if r.PropertyName != "" {
 			sb.WriteString(fmt.Sprintf(" (%s)", r.PropertyName))
 		}
 		sb.WriteString(fmt.Sprintf(" in %v\n", r.Duration()))
-		
+
 		if len(r.ShrinkSteps) > 0 {
 			sb.WriteString(fmt.Sprintf("  Shrinking progression (%d steps):\n", len(r.ShrinkSteps)))
 			for i, step := range r.ShrinkSteps {
 				sb.WriteString(fmt.Sprintf("    %d: %v\n", i+1, step))
 			}
 		}
-		
+
 		sb.WriteString(fmt.Sprintf("  Minimal counterexample: %v\n", r.Counterexample))
-		
+
 	case TestGaveUp:
 		sb.WriteString("? Property gave up (too many discarded cases)\n")
 	}
-	
+
 	return sb.String()
 }
 

@@ -4,7 +4,7 @@ import (
 	"slices"
 	"strings"
 	"testing"
-	
+
 	"github.com/rjs/go-hedgehog"
 )
 
@@ -25,7 +25,7 @@ func TestReverse(t *testing.T) {
 		doubleReversed := reverse(reversed)
 		return slices.Equal(xs, doubleReversed)
 	})
-	
+
 	report := prop.Run(hedgehog.DefaultConfig())
 	report.Assert(t)
 }
@@ -37,7 +37,7 @@ func TestStringLength(t *testing.T) {
 		uppercase := strings.ToUpper(text)
 		return len(uppercase) == len(text)
 	})
-	
+
 	report := prop.Run(hedgehog.DefaultConfig())
 	report.Assert(t)
 }
@@ -46,9 +46,9 @@ func TestStringLength(t *testing.T) {
 func TestIntegerArithmetic(t *testing.T) {
 	gen := hedgehog.IntRange(-1000, 1000)
 	prop := hedgehog.ForAllNamed(gen, "x", func(x int) bool {
-		return x + 0 == x
+		return x+0 == x
 	})
-	
+
 	report := prop.Run(hedgehog.DefaultConfig())
 	report.Assert(t)
 }
@@ -61,12 +61,12 @@ func TestFailingProperty(t *testing.T) {
 		// This is intentionally wrong to show failure
 		return len(xs) < 3
 	})
-	
+
 	config := hedgehog.DefaultConfig()
 	config.TestCount = 10 // Run fewer tests for this example
-	
+
 	report := prop.Run(config)
-	
+
 	if report.Success() {
 		t.Log("Property unexpectedly passed")
 	} else {
@@ -80,11 +80,11 @@ func TestWeightedGeneration(t *testing.T) {
 		hedgehog.NewWeightedChoice(70, hedgehog.Constant("common")),
 		hedgehog.NewWeightedChoice(30, hedgehog.Constant("rare")),
 	)
-	
+
 	prop := hedgehog.ForAllNamed(gen, "value", func(value string) bool {
 		return value == "common" || value == "rare"
 	})
-	
+
 	report := prop.Run(hedgehog.DefaultConfig())
 	report.Assert(t)
 }
@@ -96,11 +96,11 @@ func TestOneOfGeneration(t *testing.T) {
 		hedgehog.Constant("green"),
 		hedgehog.Constant("blue"),
 	)
-	
+
 	prop := hedgehog.ForAllNamed(gen, "color", func(color string) bool {
 		return color == "red" || color == "green" || color == "blue"
 	})
-	
+
 	report := prop.Run(hedgehog.DefaultConfig())
 	report.Assert(t)
 }

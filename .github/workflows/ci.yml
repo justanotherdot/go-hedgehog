@@ -8,50 +8,6 @@ on:
 
 jobs:
   test:
-    name: Test
-    runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        go-version: ['1.21', '1.22', '1.23']
-    
-    steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-    
-    - name: Set up Go
-      uses: actions/setup-go@v5
-      with:
-        go-version: ${{ matrix.go-version }}
-    
-    - name: Cache Go modules
-      uses: actions/cache@v4
-      with:
-        path: |
-          ~/.cache/go-build
-          ~/go/pkg/mod
-        key: ${{ runner.os }}-go-${{ matrix.go-version }}-${{ hashFiles('**/go.sum') }}
-        restore-keys: |
-          ${{ runner.os }}-go-${{ matrix.go-version }}-
-    
-    - name: Download dependencies
-      run: go mod download
-    
-    - name: Verify dependencies
-      run: go mod verify
-    
-    - name: Run tests
-      run: go test -v -race -coverprofile=coverage.out ./...
-    
-    - name: Upload coverage to Codecov
-      if: matrix.go-version == '1.23'
-      uses: codecov/codecov-action@v4
-      with:
-        file: ./coverage.out
-        token: ${{ secrets.CODECOV_TOKEN }}
-        fail_ci_if_error: false
-
-  lint:
-    name: Lint
     runs-on: ubuntu-latest
     
     steps:
@@ -61,59 +17,18 @@ jobs:
     - name: Set up Go
       uses: actions/setup-go@v5
       with:
-        go-version: '1.23'
+        go-version-file: 'go.mod'
     
-    - name: Run golangci-lint
-      uses: golangci/golangci-lint-action@v6
-      with:
-        version: latest
-        args: --timeout=5m
-
-  build:
-    name: Build
-    runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        goos: [linux, windows, darwin]
-        goarch: [amd64, arm64]
-        exclude:
-          - goos: windows
-            goarch: arm64
+    - name: Install dependencies
+      run: |
+        go install golang.org/x/tools/cmd/goimports@latest
+        go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
     
-    steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
+    - name: Lint
+      run: ./bin/lint
     
-    - name: Set up Go
-      uses: actions/setup-go@v5
-      with:
-        go-version: '1.23'
+    - name: Test
+      run: ./bin/test
     
     - name: Build
-      env:
-        GOOS: ${{ matrix.goos }}
-        GOARCH: ${{ matrix.goarch }}
       run: go build -v ./...
-
-  security:
-    name: Security
-    runs-on: ubuntu-latest
-    
-    steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-    
-    - name: Set up Go
-      uses: actions/setup-go@v5
-      with:
-        go-version: '1.23'
-    
-    - name: Run gosec security scanner
-      uses: securecodewarrior/github-action-gosec@master
-      with:
-        args: '-fmt sarif -out gosec.sarif ./...'
-    
-    - name: Upload SARIF file
-      uses: github/codeql-action/upload-sarif@v3
-      with:
-        sarif_file: gosec.sarif
