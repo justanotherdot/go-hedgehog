@@ -43,9 +43,16 @@ func IntRange(min, max int) *Gen[int] {
 	if min > max {
 		panic(fmt.Sprintf("IntRange: min (%d) > max (%d)", min, max))
 	}
-	
+
 	return NewGen(func(r *Random) *Tree[int] {
-		value := r.Intn(max-min+1) + min
+		// Calculate range size safely to avoid overflow
+		rangeSize := int64(max) - int64(min) + 1
+		if rangeSize <= 0 || rangeSize > int64(^uint(0)>>1) {
+			// Range too large for safe generation, clamp to reasonable size
+			rangeSize = 1000
+		}
+
+		value := r.Intn(int(rangeSize)) + min
 		return NewTree(value, func() []*Tree[int] {
 			return shrinkInt(value, min, max)
 		})
@@ -57,16 +64,16 @@ func shrinkInt(value, min, max int) []*Tree[int] {
 	if value == min {
 		return nil
 	}
-	
+
 	var shrinks []*Tree[int]
-	
+
 	// Try shrinking towards zero (if in bounds)
 	if min <= 0 && 0 <= max && value != 0 {
 		shrinks = append(shrinks, NewTree(0, func() []*Tree[int] {
 			return shrinkInt(0, min, max)
 		}))
 	}
-	
+
 	// Try shrinking towards min
 	if value > min {
 		candidate := min + (value-min)/2
@@ -76,7 +83,7 @@ func shrinkInt(value, min, max int) []*Tree[int] {
 			}))
 		}
 	}
-	
+
 	return shrinks
 }
 
@@ -85,7 +92,13 @@ func Float64Range(min, max float64) *Gen[float64] {
 	if min > max {
 		panic(fmt.Sprintf("Float64Range: min (%f) > max (%f)", min, max))
 	}
-	
+	if math.IsNaN(min) || math.IsNaN(max) {
+		panic("Float64Range: min or max is NaN")
+	}
+	if math.IsInf(min, 0) || math.IsInf(max, 0) {
+		panic("Float64Range: min or max is infinite")
+	}
+
 	return NewGen(func(r *Random) *Tree[float64] {
 		value := r.Float64()*(max-min) + min
 		return NewTree(value, func() []*Tree[float64] {
@@ -99,16 +112,16 @@ func shrinkFloat64(value, min, max float64) []*Tree[float64] {
 	if math.Abs(value-min) < 1e-10 {
 		return nil
 	}
-	
+
 	var shrinks []*Tree[float64]
-	
+
 	// Try shrinking towards zero (if in bounds)
 	if min <= 0 && 0 <= max && math.Abs(value) > 1e-10 {
 		shrinks = append(shrinks, NewTree(0.0, func() []*Tree[float64] {
 			return shrinkFloat64(0.0, min, max)
 		}))
 	}
-	
+
 	// Try shrinking towards min
 	if value > min {
 		candidate := min + (value-min)/2
@@ -118,7 +131,7 @@ func shrinkFloat64(value, min, max float64) []*Tree[float64] {
 			}))
 		}
 	}
-	
+
 	return shrinks
 }
 
@@ -147,20 +160,20 @@ func StringWithLength(lengthGen *Gen[int]) *Gen[string] {
 	return NewGen(func(r *Random) *Tree[string] {
 		lengthTree := lengthGen.Generate(r)
 		length := lengthTree.Value()
-		
+
 		if length == 0 {
 			return NewTree("", func() []*Tree[string] {
 				return nil
 			})
 		}
-		
+
 		var chars []rune
 		for i := 0; i < length; i++ {
 			// Generate printable ASCII characters
 			char := rune(r.Intn(95) + 32)
 			chars = append(chars, char)
 		}
-		
+
 		value := string(chars)
 		return NewTree(value, func() []*Tree[string] {
 			return shrinkString(value)
@@ -173,14 +186,14 @@ func shrinkString(value string) []*Tree[string] {
 	if len(value) == 0 {
 		return nil
 	}
-	
+
 	var shrinks []*Tree[string]
-	
+
 	// Try empty string
 	shrinks = append(shrinks, NewTree("", func() []*Tree[string] {
 		return nil
 	}))
-	
+
 	// Try removing characters
 	runes := []rune(value)
 	for i := 0; i < len(runes); i++ {
@@ -191,7 +204,7 @@ func shrinkString(value string) []*Tree[string] {
 			}))
 		}
 	}
-	
+
 	// Try simplifying characters
 	for i, ch := range runes {
 		simplified := simplifyChar(ch)
@@ -205,7 +218,7 @@ func shrinkString(value string) []*Tree[string] {
 			}))
 		}
 	}
-	
+
 	return shrinks
 }
 
@@ -237,19 +250,19 @@ func SliceOfWithLength[T any](elemGen *Gen[T], lengthGen *Gen[int]) *Gen[[]T] {
 	return NewGen(func(r *Random) *Tree[[]T] {
 		lengthTree := lengthGen.Generate(r)
 		length := lengthTree.Value()
-		
+
 		if length == 0 {
 			return NewTree([]T{}, func() []*Tree[[]T] {
 				return nil
 			})
 		}
-		
+
 		var elements []T
 		for i := 0; i < length; i++ {
 			elemTree := elemGen.Generate(r)
 			elements = append(elements, elemTree.Value())
 		}
-		
+
 		return NewTree(elements, func() []*Tree[[]T] {
 			return shrinkSlice(elements, elemGen, r)
 		})
@@ -261,14 +274,14 @@ func shrinkSlice[T any](value []T, elemGen *Gen[T], r *Random) []*Tree[[]T] {
 	if len(value) == 0 {
 		return nil
 	}
-	
+
 	var shrinks []*Tree[[]T]
-	
+
 	// Try empty slice
 	shrinks = append(shrinks, NewTree([]T{}, func() []*Tree[[]T] {
 		return nil
 	}))
-	
+
 	// Try removing elements
 	for i := 0; i < len(value); i++ {
 		candidate := append(value[:i:i], value[i+1:]...)
@@ -276,7 +289,7 @@ func shrinkSlice[T any](value []T, elemGen *Gen[T], r *Random) []*Tree[[]T] {
 			return shrinkSlice(candidate, elemGen, r)
 		}))
 	}
-	
+
 	return shrinks
 }
 
@@ -285,7 +298,7 @@ func OneOf[T any](generators ...*Gen[T]) *Gen[T] {
 	if len(generators) == 0 {
 		panic("OneOf: no generators provided")
 	}
-	
+
 	return NewGen(func(r *Random) *Tree[T] {
 		index := r.Intn(len(generators))
 		return generators[index].Generate(r)
@@ -297,23 +310,30 @@ func Frequency[T any](choices ...WeightedChoice[T]) *Gen[T] {
 	if len(choices) == 0 {
 		panic("Frequency: no choices provided")
 	}
-	
+
 	totalWeight := 0
 	for _, choice := range choices {
+		if choice.Weight < 0 {
+			panic(fmt.Sprintf("Frequency: negative weight %d", choice.Weight))
+		}
 		totalWeight += choice.Weight
 	}
-	
+
+	if totalWeight == 0 {
+		panic("Frequency: total weight is zero")
+	}
+
 	return NewGen(func(r *Random) *Tree[T] {
 		pick := r.Intn(totalWeight)
 		current := 0
-		
+
 		for _, choice := range choices {
 			current += choice.Weight
 			if pick < current {
 				return choice.Generator.Generate(r)
 			}
 		}
-		
+
 		// Fallback to first choice
 		return choices[0].Generator.Generate(r)
 	})

@@ -16,6 +16,8 @@ type Config struct {
 	TestCount int
 	// ShrinkCount is the maximum number of shrink attempts.
 	ShrinkCount int
+	// ShrinkLimit is the maximum number of shrink steps per counterexample.
+	ShrinkLimit int
 	// Seed is the random seed for reproducible tests.
 	Seed int64
 	// Verbose controls output verbosity.
@@ -27,6 +29,7 @@ func DefaultConfig() *Config {
 	return &Config{
 		TestCount:   100,
 		ShrinkCount: 100,
+		ShrinkLimit: 1000,
 		Seed:        time.Now().UnixNano(),
 		Verbose:     false,
 	}

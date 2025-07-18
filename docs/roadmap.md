@@ -38,6 +38,12 @@ The Go port currently implements ~30% of the full Rust hedgehog feature set, cov
 - [ ] External vs internal error differentiation
 - [ ] Recoverable vs irrecoverable error handling
 
+### Splittable PRNG
+- [ ] Implement SplitMix algorithm for proper generator splitting
+- [ ] Replace pseudo-splitting with mathematically sound splitting
+- [ ] Ensure deterministic, reproducible sequences
+- [ ] Port mixing functions and gamma selection from Haskell implementation
+
 ## Phase 2: Generator expansion (medium priority)
 
 ### Advanced string generators
