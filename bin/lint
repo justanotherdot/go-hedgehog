@@ -1,0 +1,10 @@
+#!/bin/sh -eu
+
+golangci-lint run ./...
+go vet ./...
+
+go mod tidy
+if ! git diff --quiet -- go.mod go.sum; then
+    echo "go.mod or go.sum needs updating. Run 'go mod tidy'." >&2
+    exit 1
+fi

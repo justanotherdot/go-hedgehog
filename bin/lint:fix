@@ -1,0 +1,6 @@
+#!/bin/sh -eu
+
+gofmt -w -s .
+goimports -w .
+go mod tidy
+golangci-lint run --fix ./...
